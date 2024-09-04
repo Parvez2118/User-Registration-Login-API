@@ -1,32 +1,40 @@
 const user = require('../Model/UserSchema');
 const bcrypt = require('bcrypt');
 
-exports.registerUser = (req, res) => {
+const Joi = require('joi');
+
+
+exports.registerUser = async (req, res) => {
+    const schema = Joi.object({
+        username: Joi.string().min(3).required(),
+        email: Joi.string().email().required(),
+        password: Joi.string().min(6).required()
+    });
+
+    const { error } = schema.validate(req.body);
+    if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+    }
+
     const { username, email, password } = req.body;
 
-    console.log(req.body);
-    if (!username || !email || !password) {
-
-        return res.status(400).json({ error: "Please fill field" });
-    }
-    user.findOne({ email: email }).then((userexists) => {
-
-        if (userexists) {
-
-            return res.status(404).json({ err: "email already exists" });
+    try {
+        const userExists = await user.findOne({ email });
+        if (userExists) {
+            return res.status(409).json({ error: "Email already exists" });
         }
-        const userdata = new user({ username, email, password });///passing data to the schema and then send to db
-        userdata.save().then(() => {
 
-            return res.status(200).json({ Message: req.body });
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new user({ username, email, password });
 
-        }).catch((err) => {
-            return res.status(500).json({ err: "failed to register" });
-        });
-    }).catch((err) => {
-        console.log(err);
-    })
+        await newUser.save();
+        res.status(201).json({ message: "User registered successfully" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to register" });
+    }
 };
+
+
 
 exports.loginUser = async (req, res) => {
     try {
